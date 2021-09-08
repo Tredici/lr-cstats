@@ -1,0 +1,66 @@
+8 sett 2021
+
+##############################################
+##############################################
+##########        Problema 1        ##########
+##############################################
+##############################################
+
+Per ragioni a me sconosciute gli header di linux cambiano da
+x86_64 ad arm64.
+
+Non ho la benché minima idea del perché.
+
+In particolare, cambia la definizione di alcune struct
+utilizzate da kprobe.
+
+Ho rilevato questa differenza:
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+x86_64
+struct kretprobe_instance {
+	struct hlist_node hlist;
+	struct kretprobe *rp;
+	kprobe_opcode_t *ret_addr;
+	struct task_struct *task;
+	void *fp;
+	char data[0];
+};
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+arm64
+/include/linux/kprobes.h
+struct kretprobe_instance {
+        union {
+                struct freelist_node freelist;
+                struct rcu_head rcu;
+        };
+        struct llist_node llist;
+        struct kretprobe_holder *rph;
+        kprobe_opcode_t *ret_addr;
+        void *fp;
+        char data[];
+};
+
+struct kretprobe_holder {
+	struct kretprobe	*rp;
+	refcount_t		ref;
+};
+################################
+Si noti che quello che su x86_64
+si otteneva con 
+kretprobe_instance->rp
+qui si ottiene con
+kretprobe_instance->rph->rp
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+##############################################
+##############################################
+##########        Problema 2        ##########
+##############################################
+##############################################
+
+Leggere i program counter su aarch64.
+
+Bisognerà adattare poi
+static inline u64 kstats_rdpmc(u32 reg) (in include/linux/kstats.h)
+per funzionare su aarch64
+
