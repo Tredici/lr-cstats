@@ -10,3 +10,6 @@
 *.mod.o
 *.o
 *.order
+.Module.symvers.cmd
+.modules.order.cmd
+
