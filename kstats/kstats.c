@@ -479,13 +479,13 @@ static int ks_kretp_start(struct kretprobe_instance *ri, struct pt_regs *regs)
 	 * See here for ri->rp: https://www.kernel.org/doc/html/latest/trace/kprobes.html#register-kretprobe
 	 * and here for container_of: https://www.kernel.org/doc/html/latest/driver-api/basics.html?highlight=container_of#c.container_of_safe
 	 * More info for container_of: https://www.linuxjournal.com/files/linuxjournal.com/linuxjournal/articles/067/6717/6717s2.html */
-	return ks_tp_start(container_of(ri->rp, struct ks_node, kret),
+	return ks_tp_start(container_of(ri->rph->rp, struct ks_node, kret),
 			   (void *)(ri->data));
 }
 
 static int ks_kretp_end(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	return ks_tp_end(container_of(ri->rp, struct ks_node, kret),
+	return ks_tp_end(container_of(ri->rph->rp, struct ks_node, kret),
 			 (void *)(ri->data));
 }
 
