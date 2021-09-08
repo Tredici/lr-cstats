@@ -63,9 +63,21 @@ void kstats_delete(struct kstats *key);
 
 static inline u64 kstats_rdpmc(u32 reg)
 {
-	u32 low, high;
-	asm volatile("rdpmc": "=a" (low), "=d" (high): "c" (reg));
-	return low | ((u64)(high) << 32);
+	/* See https://gcc.gnu.org/onlinedocs/gcc/Diagnostic-Pragmas.html */
+#pragma GCC warning "Reading performance counter not supported on aarch64"
+	/* RDPMC—Read Performance-Monitoring Counters
+	 * to read about it see Intel Manual at
+	 * https://software.intel.com/content/www/us/en/develop/articles/intel-sdm.html
+	 * 'Volume 2: Includes the full instruction set reference, A-Z'
+	 * but M-U is needed */
+	/* For Arm see here: https://stackoverflow.com/questions/43564391/how-do-i-use-hardware-performance-counters-in-aarch64-assembly
+	 * and search arch reference */
+	/* Original x86_64 code:
+	 * u32 low, high;
+	 * asm volatile("rdpmc": "=a" (low), "=d" (high): "c" (reg));
+	 * return low | ((u64)(high) << 32); */
+	(void)reg;
+	return 0;
 }
 
 u64 kstats_ctr(void);
