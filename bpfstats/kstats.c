@@ -77,9 +77,10 @@ static void init_root_map(struct kstats_bpf *o, const struct ks_root *root)
 static struct ks_root *open_root(const char *name)
 {
 	struct kstats_bpf__bss *bss;
-
+	int fd = bpf_obj_get(get_path(name, "bss"));
+	
 	bss = mmap(NULL, sizeof(*bss), PROT_READ | PROT_WRITE, MAP_SHARED,
-		   bpf_obj_get(get_path(name, "bss")), 0);
+		   fd, 0);
 	if (bss == MAP_FAILED)
 		err(errno, "%s: Cannot mmap 'bss'", __func__);
 	return &bss->root;
