@@ -247,22 +247,13 @@ static void create_trace(const char *name, const char *begin_hook,
 
 	init_root_map(o, root);
 
-	/* pin objects under /sys/fs/bpf/kstats/<name> */
-	create_dir(get_path(name, NULL));
-
-	/* pin map and programs */
-	pin_map(o->obj, "kslots", get_path(name, "kslots"));
-	pin_map(o->obj, "pid_map", get_path(name, "pid_map"));
-	pin_map(o->obj, "kstats_b.bss", get_path(name, "bss"));
-	pin_map(o->obj, "kstats_b.data", get_path(name, "data"));
-	pin_map(o->obj, "kstats_b.rodata", get_path(name, "rodata"));
 	//	/* Actually attach the programs */
 	// Attach KPROBE
 	printf("TEST KPROBE\n");
-	link = bpf_program__attach_kprobe(o->progs.START_HOOK,//->progs.kprobe_entry,
+	k_link = bpf_program__attach_kprobe(o->progs.START_HOOK,
 		false,
 		begin_hook);
-	ret = libbpf_get_error(link);
+	ret = libbpf_get_error(k_link);
 	if (ret) {
 		fprintf(stderr, "Could not attach kprobe to '%s': %s",
 				begin_hook, strerror(-ret));
@@ -274,14 +265,13 @@ static void create_trace(const char *name, const char *begin_hook,
 	//		DBG("pin START_HOOK returns %d", ret);
 	//	if (ret)
 	//		errx(-ret, "failed to register START_HOOK");
-	printf("TEST KPROBE: SUCCESS\n");
 
 	// Attach KRETPROBE
 	printf("TEST KRETPROBE\n");
-	link = bpf_program__attach_kprobe(o->progs.END_HOOK,//->progs.kprobe_entry,
+	kret_link = bpf_program__attach_kprobe(o->progs.END_HOOK,
 		true,
 		begin_hook);
-	ret = libbpf_get_error(link);
+	ret = libbpf_get_error(kret_link);
 	if (ret) {
 		fprintf(stderr, "Could not attach kretprobe to '%s': %s",
 				begin_hook, strerror(-ret));
@@ -293,7 +283,6 @@ static void create_trace(const char *name, const char *begin_hook,
 	//		DBG("pin END_HOOK returns %d", ret);
 	//	if (ret)
 	//		errx(-ret, "failed to register END_HOOK");
-	printf("TEST KRETPROBE: SUCCESS\n");
 
 	// OLD version
 	//	ret = kstats_bpf__attach(o);
@@ -301,30 +290,37 @@ static void create_trace(const char *name, const char *begin_hook,
 	//		err(ret, "Failed to attach bpf programs");
 
 
-	//	/* pin objects under /sys/fs/bpf/kstats/<name> */
-	//	create_dir(get_path(name, NULL));
-	//
-	//	/* pin map and programs */
-	//	pin_map(o->obj, "kslots", get_path(name, "kslots"));
-	//	pin_map(o->obj, "pid_map", get_path(name, "pid_map"));
-	//	pin_map(o->obj, "kstats_b.bss", get_path(name, "bss"));
-	//	pin_map(o->obj, "kstats_b.data", get_path(name, "data"));
-	//	pin_map(o->obj, "kstats_b.rodata", get_path(name, "rodata"));
+	/* pin objects under /sys/fs/bpf/kstats/<name> */
+	create_dir(get_path(name, NULL));
 
-	//	/* these two fail in the syscall with -EINVAL on some machines:
-	//	 * sys_bpf(BPF_OBJ_PIN, &attr, sizeof(attr));
-	//	 */
-	//	ret = bpf_link__pin(o->links.START_HOOK, get_path(name, "START_HOOK"));
-	//	if (ret  || verbose)
-	//		DBG("pin START_HOOK returns %d", ret);
-	//	if (ret)
-	//		errx(-ret, "failed to register START_HOOK");
-	//	ret = bpf_link__pin(o->links.END_HOOK, get_path(name, "END_HOOK"));
-	//	if (ret || verbose)
-	//		DBG("pin END_HOOK returns %d", ret);
-	//	if (ret)
-	//		errx(-ret, "failed to register END_HOOK");
+	/* pin map and programs */
+	pin_map(o->obj, "kslots", get_path(name, "kslots"));
+	pin_map(o->obj, "pid_map", get_path(name, "pid_map"));
+	pin_map(o->obj, "kstats_b.bss", get_path(name, "bss"));
+	pin_map(o->obj, "kstats_b.data", get_path(name, "data"));
+	pin_map(o->obj, "kstats_b.rodata", get_path(name, "rodata"));
+
+	/* these two fail in the syscall with -EINVAL on some machines:
+		* sys_bpf(BPF_OBJ_PIN, &attr, sizeof(attr));
+		*/
+	if (false)
+	{
+		ret = bpf_link__pin(o->links.START_HOOK, get_path(name, "START_HOOK"));
+		if (ret  || verbose)
+			DBG("pin START_HOOK returns %d", ret);
+		if (ret)
+			errx(-ret, "failed to register START_HOOK");
+		printf("TEST KPROBE: SUCCESS\n");
+		ret = bpf_link__pin(o->links.END_HOOK, get_path(name, "END_HOOK"));
+		if (ret || verbose)
+			DBG("pin END_HOOK returns %d", ret);
+		if (ret)
+			errx(-ret, "failed to register END_HOOK");
+		printf("TEST KRETPROBE: SUCCESS\n");
+	}
 	kstats_bpf__destroy(o);
+	printf("Done, sleeping for 1 seconds...\n");
+	sleep(1);
 }
 
 static int remove_trace(char *name)
