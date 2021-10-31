@@ -65,8 +65,8 @@ struct {
 } kslots SEC(".maps");
 
 /* Hook on function entry, collect first timestamp */
-SEC("fentry/not_a_function")
-int BPF_PROG(START_HOOK /* args */)
+SEC("kprobe/foo")
+int BPF_KPROBE(START_HOOK /* args */)
 {
 	if (!root.active)
 		return 0;
@@ -116,8 +116,8 @@ static __always_inline int increment_error(int pos)
 #define RET_IF(cond, err) if (cond) return increment_error(err)
 
 /* Hook on function exit, read second timestamp and store delta in kstats */
-SEC("fexit/not_a_function")
-int BPF_PROG(END_HOOK /* args */)
+SEC("kretprobe/foo")
+int BPF_KRETPROBE(END_HOOK /* args */)
 {
 	u64 prev, val;
 	u32 pos;
