@@ -13,7 +13,8 @@ BPFTOOL := bpftool
 LIBBPF := -lbpf
 CFLAGS_LIBBPF := -I/usr/include/bpf
 CFLAGS := -g -O2 -Wall -Werror $(CFLAGS_LIBBPF)
-CFLAGS += -static
+#Cannot use static linking for debugging pourposes
+#CFLAGS += -static
 APP_NAME := kstats
 
 .PHONY: all
