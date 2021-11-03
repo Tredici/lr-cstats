@@ -303,15 +303,15 @@ static void create_trace(const char *name, const char *begin_hook,
 	/* these two fail in the syscall with -EINVAL on some machines:
 		* sys_bpf(BPF_OBJ_PIN, &attr, sizeof(attr));
 		*/
-	if (false)
+	if (true)
 	{
-		ret = bpf_link__pin(o->links.START_HOOK, get_path(name, "START_HOOK"));
+		ret = bpf_link__pin(k_link, get_path(name, "START_HOOK"));
 		if (ret  || verbose)
 			DBG("pin START_HOOK returns %d", ret);
 		if (ret)
 			errx(-ret, "failed to register START_HOOK");
 		printf("TEST KPROBE: SUCCESS\n");
-		ret = bpf_link__pin(o->links.END_HOOK, get_path(name, "END_HOOK"));
+		ret = bpf_link__pin(kret_link, get_path(name, "END_HOOK"));
 		if (ret || verbose)
 			DBG("pin END_HOOK returns %d", ret);
 		if (ret)
