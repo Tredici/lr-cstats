@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <bpf/bpf.h>
@@ -38,6 +39,12 @@
 static int verbose;
 static const char *kstats_dir = "/sys/fs/bpf/kstats";
 
+/* To be used with pause(), should do nothing */
+static void dummyHandler(int sig){}
+
+static int remove_trace(const char *name);
+static int dump_trace(const char *name);
+
 /* NOTE: non-reentrant */
 static char *get_path(const char *name, const char *table)
 {
@@ -48,19 +55,6 @@ static char *get_path(const char *name, const char *table)
 	if (n < 0 || n == sizeof(ret))
 		err(errno, "%s failed for '%s' '%s'\n", __func__, name, table);
 	return ret;
-}
-
-static void set_hook(struct bpf_program *prog, const char *hook, int type)
-	__attribute__((unused));
-/* Set the attach hook and type for a program */
-static void set_hook(struct bpf_program *prog, const char *hook, int type)
-{
-	bpf_program__set_expected_attach_type(prog, type);
-	errno = -bpf_program__set_attach_target(prog, /*vmlinux*/0, hook);
-	if (!errno)
-		return;
-	errx(errno, "Failed to set hook '%s' type %d error %d '%s'", hook,
-	     type, errno, errno == ESRCH ? "hook not found" : "unknown");
 }
 
 static void init_root_map(struct kstats_bpf *o, const struct ks_root *root)
@@ -219,13 +213,10 @@ static void create_trace(const char *name, const char *begin_hook,
 	struct bpf_link *k_link;
 	struct bpf_link *kret_link;
 	struct kstats_bpf *o = kstats_bpf__open(); /* open embedded bpf */
+	struct sigaction int_handler, old_handler;
 
 	if (!o)
 		err(errno, "kstats_bpf__open failed");
-
-	//	/* override attach points */
-	//	set_hook(o->progs.START_HOOK, begin_hook, BPF_TRACE_FENTRY);
-	//	set_hook(o->progs.END_HOOK, end_hook, BPF_TRACE_FEXIT);
 
 	if (bits > 12)
 		errx(EINVAL, "bits %d must be <= 12", bits);
@@ -260,11 +251,6 @@ static void create_trace(const char *name, const char *begin_hook,
 		exit(EXIT_FAILURE);
 	}
 	printf("TEST KPROBE: attached\n");
-	//	ret = bpf_link__pin(link, get_path(name, "START_HOOK"));
-	//	if (ret  || verbose)
-	//		DBG("pin START_HOOK returns %d", ret);
-	//	if (ret)
-	//		errx(-ret, "failed to register START_HOOK");
 
 	// Attach KRETPROBE
 	printf("TEST KRETPROBE\n");
@@ -278,17 +264,16 @@ static void create_trace(const char *name, const char *begin_hook,
 		exit(EXIT_FAILURE);
 	}
 	printf("TEST KRETPROBE: attached\n");
-	//	ret = bpf_link__pin(link, get_path(name, "END_HOOK"));
-	//	if (ret || verbose)
-	//		DBG("pin END_HOOK returns %d", ret);
-	//	if (ret)
-	//		errx(-ret, "failed to register END_HOOK");
 
-	// OLD version
-	//	ret = kstats_bpf__attach(o);
-	//	if (ret)
-	//		err(ret, "Failed to attach bpf programs");
 
+	/* Prepare signal handler */
+	memset(&int_handler, 0, sizeof(int_handler));
+	int_handler.sa_handler = &dummyHandler;
+	if (sigaction(SIGINT, &int_handler, &old_handler) != 0)
+	{
+		fprintf(stderr, "Error: sigaction(), %s(%d)\n", strerror(errno), errno);
+		abort();
+	}
 
 	/* pin objects under /sys/fs/bpf/kstats/<name> */
 	create_dir(get_path(name, NULL));
@@ -300,30 +285,37 @@ static void create_trace(const char *name, const char *begin_hook,
 	pin_map(o->obj, "kstats_b.data", get_path(name, "data"));
 	pin_map(o->obj, "kstats_b.rodata", get_path(name, "rodata"));
 
-	/* these two fail in the syscall with -EINVAL on some machines:
-		* sys_bpf(BPF_OBJ_PIN, &attr, sizeof(attr));
-		*/
-	if (true)
-	{
-		ret = bpf_link__pin(k_link, get_path(name, "START_HOOK"));
-		if (ret  || verbose)
-			DBG("pin START_HOOK returns %d", ret);
-		if (ret)
-			errx(-ret, "failed to register START_HOOK");
-		printf("TEST KPROBE: SUCCESS\n");
-		ret = bpf_link__pin(kret_link, get_path(name, "END_HOOK"));
-		if (ret || verbose)
-			DBG("pin END_HOOK returns %d", ret);
-		if (ret)
-			errx(-ret, "failed to register END_HOOK");
-		printf("TEST KRETPROBE: SUCCESS\n");
-	}
 	kstats_bpf__destroy(o);
-	printf("Done, sleeping for 1 seconds...\n");
-	sleep(1);
+
+	while (true)
+	{
+		char c;
+		printf("Pause... Press ^C to stop\n");
+		pause();
+		printf("Do you really want to stop the tracing and display data? (y/n) ");
+#pragma GCC diagnostic ignored "-Wunused-result"
+		scanf("%c", &c);
+#pragma GCC diagnostic pop
+		printf("\n");
+		if (c == 'y')
+		{
+			if (sigaction(SIGINT, &old_handler, NULL) != 0)
+			{
+				fprintf(stderr, "Error: sigaction(), %s(%d)\n", strerror(errno), errno);
+				abort();
+			}
+			break;
+		}
+	}
+	printf("\n\n");
+	printf("Dumping data:\n");
+	(void)dump_trace(name);
+	printf("Cleaning maps...\n");
+	(void)remove_trace(name);
+	printf("Done!\n");
 }
 
-static int remove_trace(char *name)
+static int remove_trace(const char *name)
 {
 	/* unlink objects and remove directory */
 	int ret;
@@ -333,8 +325,6 @@ static int remove_trace(char *name)
 	ret |= !!unlink(get_path(name, "bss"));
 	ret |= !!unlink(get_path(name, "data"));
 	ret |= !!unlink(get_path(name, "rodata"));
-	ret |= !!unlink(get_path(name, "START_HOOK"));
-	ret |= !!unlink(get_path(name, "END_HOOK"));
 	ret |= !!rmdir(get_path(name, NULL));
 	return ret;
 }
