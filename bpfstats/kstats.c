@@ -204,8 +204,8 @@ static void pin_map(const struct bpf_object *obj, const char *name,
 	err(ret, "pin map '%s' at %p returns %d\n", name, map, ret);
 }
 
-static void create_trace(const char *name, const char *begin_hook,
-			 const char *end_hook, struct ks_root *root)
+static void create_trace(const char *name, const char *hook_function,
+			struct ks_root *root)
 {
 	int ret;
 	const __u8 bits = root->frac_bits;
@@ -243,11 +243,11 @@ static void create_trace(const char *name, const char *begin_hook,
 	printf("TEST KPROBE\n");
 	k_link = bpf_program__attach_kprobe(o->progs.START_HOOK,
 		false,
-		begin_hook);
+		hook_function);
 	ret = libbpf_get_error(k_link);
 	if (ret) {
 		fprintf(stderr, "Could not attach kprobe to '%s': %s",
-				begin_hook, strerror(-ret));
+				hook_function, strerror(-ret));
 		exit(EXIT_FAILURE);
 	}
 	printf("TEST KPROBE: attached\n");
@@ -256,11 +256,11 @@ static void create_trace(const char *name, const char *begin_hook,
 	printf("TEST KRETPROBE\n");
 	kret_link = bpf_program__attach_kprobe(o->progs.END_HOOK,
 		true,
-		begin_hook);
+		hook_function);
 	ret = libbpf_get_error(kret_link);
 	if (ret) {
 		fprintf(stderr, "Could not attach kretprobe to '%s': %s",
-				begin_hook, strerror(-ret));
+				hook_function, strerror(-ret));
 		exit(EXIT_FAILURE);
 	}
 	printf("TEST KRETPROBE: attached\n");
@@ -451,13 +451,12 @@ static const char * const helpmsg[] = {
 		"awk -F \"'\" '/FUNC.*linkage/ {print $2}' | sort | less",
 	"\tkstats NAME	# show data for the named table",
 	"\tkstats NAME remove|reset|start|stop # control operation for table",
-	"\tkstats NAME [bits B] [buckets N] [begin X] [end Y] [percpu] "
+	"\tkstats NAME [bits B] [buckets N] [function F] [percpu] "
 			"[active] # create",
 	"\t\tNAME : name of the trace/function being traced",
 	"\t\tB : fractional bits per power of 2 [max 3]",
 	"\t\tN : buckets (max value is 2^N, 0..64)",
-	"\t\tX : begin hook [default NAME]",
-	"\t\tY : end hook [default X]",
+	"\t\tF : kernel function to be traced [default NAME]",
 	NULL
 };
 
@@ -480,7 +479,7 @@ static int my_bpf_print(enum libbpf_print_level lvl, const char *fmt,
 int main(int argc, char *argv[])
 {
 	struct ks_root root = { .frac_bits = 3, .buckets = 64, .active = 1 };
-	char *name, *begin_hook = NULL, *end_hook = NULL;
+	char *name, *hook_function = NULL;
 	int i = 1;
 
 	libbpf_set_print(my_bpf_print); /* set printf function for libbpf */
@@ -533,17 +532,14 @@ int main(int argc, char *argv[])
 			root.active = 0;
 		} else if (!strcmp(arg, "percpu") || !strcmp(arg, "pcpu")) {
 			root.percpu = 1;
-		} else if (!strcmp(arg, "begin")) {
-			begin_hook = argv[++i];
-		} else if (!strcmp(arg, "end")) {
-			end_hook = argv[++i];
+		} else if (!strcmp(arg, "function")) {
+			hook_function = argv[++i];
 		} else {
 			warnx("invalid option '%s'", arg);
 			usage(EINVAL);
 		}
 	}
-	begin_hook = begin_hook ? : name;
-	end_hook = end_hook ? : begin_hook;
-	create_trace(name, begin_hook, end_hook, &root);
+	hook_function = hook_function ? : name;
+	create_trace(name, hook_function, &root);
 	return 0;
 }
